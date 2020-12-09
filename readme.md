@@ -1,4 +1,7 @@
-# 笔记
+# spring-cloud学习笔记
+> springcloud 项目构建和组件调用学习
+
+[基础知识笔记](https://github.com/iSAM2016/javalearn)
 
 ## springboot/springcloud版本选择
 
@@ -44,6 +47,7 @@ cloud 的组件选择
         * 子模块不用写groupId 和version
     5. 跳过单元测试
     6. 父工程创建完成执行mvn:install将父工程发布到仓库方便子工程继承
+    7. [maven 私服搭建教程](https://www.jianshu.com/p/09a6cab3785a)
     
 4. 工程名字
 5. 字符编码
@@ -207,8 +211,13 @@ eureka:
 
 ### 集群 （略）
 
-p19-46 没有看
+p19-42 没有看
 
+42-47
+
+47--65
+
+65---
 
 ### Hystrix 断路器（暂时放弃）
 
@@ -228,3 +237,155 @@ Hystrix 是一个用于处理分布式系统的延迟和容错的开源库，在
 "断路器"本身是一种开关装置，当某个服务单元发生故障以后，通过断路器的故障监控，向方向返回一个符合预期的，可处理的备选响应（FallBack）,而不是长期的等待或者跑出调用方法无法处理的异常，这样就保证了服务调用方的线程不会被长时间，不必要的占用
 ，从而避免了故障在分布式系统中的蔓延，乃至雪崩
 [B 站](https://www.bilibili.com/video/BV18E411x7eT?p=74)
+
+## OpenFeign
+
+Feign 是一个声明式webserver 客户端，让编写web 服务客户端非常容易，只需创建一个借口并在借口
+
+openFeig的使用步骤
+1 接口+ 注释
+
+1. 微服务调用接口 + @FeignClient
+  
+在主类里面添加
+```java
+@SpringBootApplication
+@EnableFeignClients
+public class SeckillApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(SeckillApplication.class,args);
+    }
+}
+```
+
+接口 提供server
+
+```java
+@FeignClient(name = "goods")//  name 为微服务名称 application-name: goods
+@RequestMapping(value = "/sku")
+public interface SkuFeign {
+    /***
+     * 根据ID查询SKU信息  
+     * @param id : sku的ID
+     */
+    @GetMapping("/{id}")
+    public Result<Sku> findById(@PathVariable("id") String id);
+
+    /**
+     * 减少库存
+     * @param decrmap
+     * @return
+     */
+    @GetMapping(value = "/decr/count")
+    public  Result decrCount(@RequestParam Map<String, Integer> decrmap);
+}
+```
+
+引用
+
+```
+ @Autowired
+     SkuFeign skuFeign;
+```
+### Feign 超时
+
+Feign 客户端只等待一秒，但是服务端处理需要超过1 秒钟， 导致Feign客户端不行等待了，直接返回错误。
+为了避免这样的情况，有时候需要设置Feign客户端超时控制，在yml 文件中开启
+
+```xml
+ribbon:
+# 指定是建立时间所用的时间，适用于网络状况正常的情况下 两段连接所用的时间
+  ReadTimeout: 5000
+# 指的是建立连接后从服务器读取到可用资源所用的时间  
+  ConnecTimeout: 5000
+```
+
+### 日志增强
+监控Feign 接口运行的状况
+
+NONE: 默认的 不显示任何日志
+
+BASIC 仅仅记录强求方法，URL 响应状态码及执行时间
+
+HEADERS 除了BASIC 中定义的信息之外，还用请求和响应的头信息
+
+FULL: 除了HEADERS 中的信息以外 还有请求和响应的正文和元数据
+
+
+```java
+配置config 
+
+@Configuration
+public class FeignCofnig{
+  @Bean
+  Logger.Level feignLoggerLevel(){
+    return Logger.Level.FULL
+  }
+}
+```
+在yml开启logger
+```yml
+ logging:
+  level:
+  #  feign 日志以什么级别控制那个接口
+    com.atguigu.springcloud.service.PaymentFeignService: debug
+```
+
+## gateway
+
+gateway 提供一张简单而有效的统一的API路由管理方式 以及提供一些强大的过滤功能，例如熔断，限流，重试
+
+网关一般出现在什么地方
+![](./img/WX20201126-211424.png)
+
+spring Cloud GateWay 具有以下特性
+
+1 动态路由：能够匹配任何请求属性
+2 可以对路由指定Predicate(断言) 和 Filter(过滤器)
+3 集成 Hystrix 的断路器功能
+4 集成Spring Cloud 服务发现功能
+5  易于编写的Predicate 断言和 Filer 过滤器
+6  请求限流功能
+7 支持路径重写
+
+Route-路由： 路由是构建网关的基本模块，他是由ID 目标URL 一系列的断言和过滤器组成，
+
+Predicate 断言： 开发人员可以匹配HTTP 请求中的所有内容（列入请求头或请求参数），如果请求与断言相匹配则进行路由。
+
+Filter- 指的是Spring框架中GatewayFilter 的实例 使用过滤器，可以在请求被路由前或者之后对请求进行修改
+
+
+web 请求， 通过 一些匹配条件，定位到真正的服务节点，并在这个转发过程的前后，进行一些金细化控制。
+predicate 就是我们的匹配条件； filter 就可以理解为一个无所不能的拦截器 有课这连个元素，在加上目标UURL 就可以实现一个具体的路由了
+
+过滤器质检用虚线分开是因为过滤器可能会在发送代理请求之前（pre） 或之后（post） 执行业务逻辑
+
+filter 在per 类型的过滤器可以做参数校验，权限校验，流量监控，日志输出。协议转换
+
+post 响应内容 响应头的修改 日志的输入 流量监控
+```
+spring 网关 不需要 spring-boot-starter-web 网关
+```
+
+### 动态路由
+
+```xml
+spring:
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true 开启从注册中心动态创建路由的功能 利用微服务进行路由
+    routes: 
+      - id: payment_routh
+        uri: lb//cloud-payment-service  注册中心的名字
+```
+
+
+filter 常用
+```
+filter： 
+  - AddRequstParameter=X-Request-Id，1024 # 过滤器工厂会在匹配的请求头上加上一对请求头，名字为X-Request-Id:1024
+```
+
+全局定义GlobalFilter
